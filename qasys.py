@@ -17,13 +17,8 @@ class Question:
 TRAIN_Q_PATH = "hw5data/qadata/train/questions.txt"
 TEST_Q_PATH = "hw5data/qadata/test/questions.txt"
 STOP_WORDS_PATH = "hw5data/stopwords.txt"
-<<<<<<< HEAD
 TRAIN_TOPDOCS_PATH = "hw5data/topdocs/train/top_docs."
 TEST_TOPDOCS_PATH = "hw5data/topdocs/test/top_docs."
-=======
-TRAIN_TOPDOCS_PATH = "hw5data/topdocs/train/topdocs."
-TEST_TOPDOCS_PATH = "hw5data/topdocs/test/topdocs."
->>>>>>> 1bbd31f8732619b264912116f9a74af60311c3bb
 
 SENT_DETECTOR = nltk.data.load('tokenizers/punkt/english.pickle')
 
@@ -72,17 +67,12 @@ def getStopWords():
 #Retrive a list of the tokens in the topdocs for associated question
 def getTrainTopDocs(qNum):
     with codecs.open(TRAIN_TOPDOCS_PATH + str(qNum), 'r', 'cp437') as topdocsData:
-<<<<<<< HEAD
         sentences = SENT_DETECTOR.tokenize(topdocsData.read().strip()) #CHANGE TO SENTENCE SPLIT
-=======
-        sentences =  '\n'.join(SENT_DETECTOR.tokenize(topDocs.read().strip())) #CHANGE TO SENTENCE SPLIT
->>>>>>> 1bbd31f8732619b264912116f9a74af60311c3bb
     return [x.split() for x in sentences]
 
 #Retrive a list of the tokens in the topdocs for associated question
 def getTestTopDocs(qNum):
     with codecs.open(TEST_TOPDOCS_PATH + str(qNum), 'r', 'cp437') as topdocsData:
-<<<<<<< HEAD
         sentences =  SENT_DETECTOR.tokenize(topdocsData.read().strip()) #CHANGE TO SENTENCE SPLIT
     return [x.split() for x in sentences]
 
@@ -104,16 +94,6 @@ def cosSim(vec1, vec2):
         return (numerator / denominator)
 
 #def getQueryVector(docSentence, query):
-    
-=======
-        sentences =  '\n'.join(SENT_DETECTOR.tokenize(topDocs.read().strip())) #CHANGE TO SENTENCE SPLIT
-    return [x.split() for x in sentences]
-
-#Determine cosine similarity score between two vectos
-def cosSim(vec1, vec2):
-    numerator = float(sum([vec1[i] * vec2[i] for i in range(0, len(vec1))]))
-    denominator = 1 #TODO CHANGE ME
->>>>>>> 1bbd31f8732619b264912116f9a74af60311c3bb
 
 if __name__ == "__main__":
     #Read in data
@@ -127,9 +107,5 @@ if __name__ == "__main__":
         for token in q.tokens:
             print token + " "
 
-<<<<<<< HEAD
     print(getTrainTopDocs(1)[0])
-=======
-    print(getTrainTopDocs(1))
->>>>>>> 1bbd31f8732619b264912116f9a74af60311c3bb
 
