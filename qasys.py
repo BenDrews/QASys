@@ -7,10 +7,11 @@ import math
 import nltk.data
 
 class Question:
-    def __init__(self, number, qType, tokens):
+    def __init__(self, number, qType, tokens, weights):
         self.number = number
         self.qType = qType
         self.tokens = tokens
+        self.weights = weights
 
 #Usage
 
@@ -35,7 +36,7 @@ def getQuestions(path):
     #Pack questions into Question object
     for i in range(0, len(questionLines) - 2, 3):
         processedQ = processQuestion(questionLines[i + 1].split(), stopWords)
-        questions.append(Question(int(questionLines[i].split()[1]), processedQ[0], processedQ[1]))
+        questions.append(Question(int(questionLines[i].split()[1]), processedQ[0], processedQ[1], processedQ[2]))
     return questions
 
 #Process a question to determine its type and prepare it's query
@@ -57,7 +58,8 @@ def processQuestion(tokens, stopWords):
     for p in punctuation:
         tokens = set([x.replace(p, "") for x in tokens])
 
-    return (qType, tokens)
+    weights = [1.0 for x in range(0, len(tokens))]
+    return (qType, list(tokens), weights)
     
 #Retrieve a set of stopwords
 def getStopWords():
@@ -67,14 +69,15 @@ def getStopWords():
 #Retrive a list of the tokens in the topdocs for associated question
 def getTrainTopDocs(qNum):
     with codecs.open(TRAIN_TOPDOCS_PATH + str(qNum), 'r', 'cp437') as topdocsData:
-        sentences = SENT_DETECTOR.tokenize(topdocsData.read().strip()) #CHANGE TO SENTENCE SPLIT
-    return [x.split() for x in sentences]
+        sentences =  SENT_DETECTOR.tokenize(topdocsData.read().strip())
+    return [[y.lower() for y in x.split()] for x in sentences]
+
 
 #Retrive a list of the tokens in the topdocs for associated question
 def getTestTopDocs(qNum):
     with codecs.open(TEST_TOPDOCS_PATH + str(qNum), 'r', 'cp437') as topdocsData:
-        sentences =  SENT_DETECTOR.tokenize(topdocsData.read().strip()) #CHANGE TO SENTENCE SPLIT
-    return [x.split() for x in sentences]
+        sentences =  SENT_DETECTOR.tokenize(topdocsData.read().strip())
+    return [[y.lower() for y in x.split()] for x in sentences]
 
 #Comptues magnitude of a vector. Helper for Cosine Similarity
 def mag(v):
@@ -88,12 +91,38 @@ def mag(v):
 def cosSim(vec1, vec2):
     numerator = float(sum([vec1[i] * vec2[i] for i in range(0, len(vec1))]))
     denominator = mag(vec1) * mag(vec2)
+
+    #In the case of 0 magnitude, we want the similarity to be zero
     if denominator == 0:
-        return 0
+        return 0 
     else:
         return (numerator / denominator)
 
-#def getQueryVector(docSentence, query):
+def getQueryVector(docSentence, query):
+    keywordVector = [0 for x in range(0, len(query))]
+    for token in docSentence:
+        if token in query:
+            keywordVector[query.index(token)] += 1
+    return keywordVector
+
+def sortTopDocs(sentences, question):
+    sentences.sort(key=lambda x: cosSim(question.weights, getQueryVector(x, question.tokens)), reverse=True)
+
+def extractAnswers(sortedDocs, question):
+
+    possibleAnswers = []
+    weights = []
+    for i in range(0, 10):
+        for j in range(0, len(sortedDocs[i])):
+            token = sortedDocs[i][j]
+            if not token in question.tokens:
+                if not token in possibleAnswers:
+                    possibleAnswers.append(token)
+                    weights.append(1)
+                else:
+                    weights[possibleAnswers.index(token)] += 1
+    return sorted(possibleAnswers, key=lambda x: weights[possibleAnswers.index(x)])
+            
 
 if __name__ == "__main__":
     #Read in data
@@ -107,5 +136,15 @@ if __name__ == "__main__":
         for token in q.tokens:
             print token + " "
 
-    print(getTrainTopDocs(1)[0])
+        topDocs = getTrainTopDocs(q.number)
+        sortTopDocs(topDocs, q)
+        for i in range(0, 5):
+            print "\nTopDoc number " + str(i + 1) + ": " + str(topDocs[i])
+            
+        possibleAnswers = extractAnswers(topDocs, q)
+        for i in range(0, min(len(possibleAnswers), 5)):
+            print "\nPossible answer: " + possibleAnswers[i]
+
+    
+    
 
