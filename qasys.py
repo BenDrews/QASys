@@ -1,6 +1,7 @@
 import sys
 import codecs
 from nltk.stem.snowball import SnowballStemmer
+from nltk.tag.stanford import StanfordNERTagger
 import nltk
 import operator
 import math
@@ -21,6 +22,7 @@ TRAIN_TOPDOCS_PATH = "hw5data/topdocs/train/top_docs."
 TEST_TOPDOCS_PATH = "hw5data/topdocs/test/top_docs."
 
 SENT_DETECTOR = nltk.data.load('tokenizers/punkt/english.pickle')
+NER_TAGGER = StanfordNERTagger('/home/cs-students/18bfd2/bin/stanford-ner-2014-08-27/classifiers/english.all.3class.distsim.crf.ser.gz', '/home/cs-students/18bfd2/bin/stanford-ner-2014-08-27/stanford-ner.jar')
 
 #Read in and process the questions located at path
 def getQuestions(path):
@@ -112,14 +114,16 @@ def extractAnswers(sortedDocs, question):
     possibleAnswers = []
     weights = []
     for i in range(0, 10):
-        for j in range(0, len(sortedDocs[i])):
-            token = sortedDocs[i][j]
-            if not token in question.tokens:
-                if not token in possibleAnswers:
-                    possibleAnswers.append(token)
+        namedEntities = NER_TAGGER.tag(sortedDocs[i])
+        for j in range(0, len(namedEntities)):
+            entity = namedEntities[j]
+
+            if not (entity[1] == 'O' or entity[0] in question.tokens):
+                if not (entity[0] in possibleAnswers):
+                    possibleAnswers.append(entity[0])
                     weights.append(1)
                 else:
-                    weights[possibleAnswers.index(token)] += 1
+                    weights[possibleAnswers.index(entity[0])] += 1
     return sorted(possibleAnswers, key=lambda x: weights[possibleAnswers.index(x)])
             
 
