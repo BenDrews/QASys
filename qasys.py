@@ -14,7 +14,6 @@ class Question:
         self.weights = weights
 
 #Usage
-
 TRAIN_Q_PATH = "hw5data/qadata/train/questions.txt"
 TEST_Q_PATH = "hw5data/qadata/test/questions.txt"
 STOP_WORDS_PATH = "hw5data/stopwords.txt"
@@ -71,6 +70,7 @@ def getTrainTopDocs(qNum):
     with codecs.open(TRAIN_TOPDOCS_PATH + str(qNum), 'r', 'cp437') as topdocsData:
         sentences =  SENT_DETECTOR.tokenize(topdocsData.read().strip())
     return [[y.lower() for y in x.split()] for x in sentences]
+# TODO: CHANGE TO LOWERCASE LATER (PoS tagging)
 
 
 #Retrive a list of the tokens in the topdocs for associated question
@@ -109,7 +109,6 @@ def sortTopDocs(sentences, question):
     sentences.sort(key=lambda x: cosSim(question.weights, getQueryVector(x, question.tokens)), reverse=True)
 
 def extractAnswers(sortedDocs, question):
-
     possibleAnswers = []
     weights = []
     for i in range(0, 10):
