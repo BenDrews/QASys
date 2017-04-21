@@ -41,6 +41,7 @@ def getQuestions(path):
         questions.append(Question(int(questionLines[i].split()[1]), processedQ[0], processedQ[1], processedQ[2]))
     return questions
 
+#STAR
 #Process a question to determine its type and prepare it's query
 def processQuestion(tokens, stopWords):
     #Strip casing
@@ -74,7 +75,7 @@ def getTrainTopDocs(qNum):
         sentences =  SENT_DETECTOR.tokenize(topdocsData.read().strip())
     return [x.split() for x in sentences]
 
-
+#STAR
 #Retrive a list of the tokens in the topdocs for associated question
 def getTestTopDocs(qNum):
     with codecs.open(TEST_TOPDOCS_PATH + str(qNum), 'r', 'cp437') as topdocsData:
@@ -100,6 +101,7 @@ def cosSim(vec1, vec2):
     else:
         return (numerator / denominator)
 
+#MAYBE STAR
 #Find average distance to question keywords
 def keywordDistance(docSentence, question, ansIndex):
     keywordIndices = []
@@ -113,6 +115,7 @@ def keywordDistance(docSentence, question, ansIndex):
     
     return 1.0/invResult
 
+#STAR
 #For a given document sentence and set of query keywords, return a vector
 # that represents the frequency with which those keywords occury in the
 # sentence
@@ -123,21 +126,25 @@ def getQueryVector(docSentence, query):
             keywordVector[query.index(token.lower())] += 1
     return keywordVector
 
+#STAR
 #Sort the top docs for a given question by their cosine similarity to 
 # the keywords of the question.
 def sortTopDocs(sentences, question):
     sentences.sort(key=lambda x: cosSim(question.weights, getQueryVector(x, question.tokens)), reverse=True)
 
+#STAR
 #Method to edit most
 #Takes the top 5 documents and ranks which entities might be answers
 def extractAnswers(sortedDocs, question):
     possibleAnswers = []
     weights = []
     nounTags = ['NN', 'NNP', 'NNS', 'NNPS']
+    neTagLookup = {'where':['LOCATION'], 'who':['PERSON', 'ORGANIZATION'], 'when':['DATE']}
+    
 
     #Take top 5 topdocs
 
-    if question.qType is 'where' or question.qType is 'who':
+    if question.qType is 'where' or question.qType is 'who' or question.qType is 'when':
         for i in range(0, 5):
             namedEntities = NER_TAGGER.tag(sortedDocs[i])
             print str(namedEntities)
@@ -147,7 +154,7 @@ def extractAnswers(sortedDocs, question):
                 entity = namedEntities[j]
 
                 #If the entity is not a named entity or is part of the question, don't consider it
-                if not (entity[1] == 'O' or entity[0] in question.tokens):
+                if entity[1] in neTagLookup[question.qType] and (not entity[0] in question.tokens):
 
                 #If the entity is not yet a possible answer add it, else increment it's weight
                     if not (entity[0] in possibleAnswers):
@@ -155,17 +162,17 @@ def extractAnswers(sortedDocs, question):
                         weights.append(1)
                     else:
                         weights[possibleAnswers.index(entity[0])] += 1
-    elif question.qType is 'when' or 'how':
+    elif question.qType is 'how':
         for i in range(0, 5):
             partsOfSpeech = nltk.pos_tag(sortedDocs[i])
             print str(partsOfSpeech)
 
             #Consider each entity tagged
             for j in range(0, len(partsOfSpeech)):
-                entity = namedEntities[j]
+                entity = partsOfSpeech[j]
                 
                 #If the entity is not a named entity or is part of the question, don't consider it
-                if  entity[1] is 'CD' and not entity[0] in question.tokens:
+                if  entity[1] is 'CD' and (not entity[0] in question.tokens):
 
                 #If the entity is not yet a possible answer add it, else increment it's weight
                     if not (entity[0] in possibleAnswers):
@@ -174,6 +181,23 @@ def extractAnswers(sortedDocs, question):
                     else:
                         weights[possibleAnswers.index(entity[0])] += 1
     elif question.qType is 'what' or 'which' or 'why' or 'unknown':
+        for i in range(0, 5):
+            partsOfSpeech = nltk.pos_tag(sortedDocs[i])
+            print str(partsOfSpeech)
+
+            #Consider each entity tagged
+            for j in range(0, len(partsOfSpeech)):
+                entity = partsOfSpeech[j]
+                
+                #If the entity is not a named entity or is part of the question, don't consider it
+                if  entity[1] in nounTags and (not entity[0] in question.tokens):
+
+                #If the entity is not yet a possible answer add it, else increment it's weight
+                    if not (entity[0] in possibleAnswers):
+                        possibleAnswers.append(entity[0])
+                        weights.append(1)
+                    else:
+                        weights[possibleAnswers.index(entity[0])] += 1
     return sorted(possibleAnswers, key=lambda x: weights[possibleAnswers.index(x)])
 
 def writeAnswersToFile(possibleAnswers, qid):
