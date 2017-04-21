@@ -3,9 +3,11 @@ import codecs
 from nltk.stem.snowball import SnowballStemmer
 from nltk.tag.stanford import StanfordNERTagger
 from nltk import Tree
+from nltk.corpus import wordnet
 import nltk
 import operator
 import math
+from itertools import chain
 import re
 import pprint
 import nltk.data
@@ -19,7 +21,12 @@ class Question:
 
 # Regex patterns for chunking
 patterns = """
-NP: {<NN>+}
+NP: 
+{<NNP>+}
+{<NNP..?><NNP..?>+}
+{<NNP><NNP>+}
+{<NN><NN>+}
+{<NN>+}
 """
 NPChunker = nltk.RegexpParser(patterns)
 
@@ -28,12 +35,12 @@ TEST_Q_PATH = "hw5data/qadata/test/questions.txt"
 STOP_WORDS_PATH = "hw5data/stopwords.txt"
 TRAIN_TOPDOCS_PATH = "hw5data/topdocs/train/top_docs."
 TEST_TOPDOCS_PATH = "hw5data/topdocs/test/top_docs."
+SYN_WEIGHT = 1.0
 
 SENT_DETECTOR = nltk.data.load('tokenizers/punkt/english.pickle')
 NER_TAGGER = StanfordNERTagger('/home/cs-students/18bfd2/bin/stanford-ner-2014-08-27/classifiers/english.muc.7class.distsim.crf.ser.gz', '/home/cs-students/18bfd2/bin/stanford-ner-2014-08-27/stanford-ner.jar')
 
 predictionFile = open('prediction.txt', 'w')
-
 
 #Read in and process the questions located at path
 def getQuestions(path):
@@ -51,7 +58,6 @@ def getQuestions(path):
         questions.append(Question(int(questionLines[i].split()[1]), processedQ[0], processedQ[1], processedQ[2]))
     return questions
 
-#STAR
 #Process a question to determine its type and prepare it's query
 def processQuestion(tokens, stopWords):
     #Strip casing
@@ -72,7 +78,21 @@ def processQuestion(tokens, stopWords):
         tokens = set([x.replace(p, "") for x in tokens])
 
     weights = [1.0 for x in range(0, len(tokens))]
-    return (qType, list(tokens), weights)
+
+    tokens = list(tokens)
+
+    #Add in keyword synonyms
+    synonymLemmas = []
+
+    for token in tokens:
+        synonyms = wordnet.synsets(token)
+        synonymLemmas.extend(list(set(chain.from_iterable([word.lemma_names() for word in synonyms]))))
+
+    synonymLemmas = list(set(synonymLemmas))
+    tokens.extend(synonymLemmas)
+    weights.extend([SYN_WEIGHT for x in range(0, len(synonymLemmas))])
+
+    return (qType, tokens, weights)
     
 #Retrieve a set of stopwords
 def getStopWords():
@@ -85,14 +105,11 @@ def getTrainTopDocs(qNum):
         sentences =  SENT_DETECTOR.tokenize(topdocsData.read().strip())
     return [x.split() for x in sentences]
 
-#STAR
 #Retrive a list of the tokens in the topdocs for associated question
 def getTestTopDocs(qNum):
     with codecs.open(TEST_TOPDOCS_PATH + str(qNum), 'r', 'cp437') as topdocsData:
         sentences =  SENT_DETECTOR.tokenize(topdocsData.read().strip())
     return [x.split() for x in sentences]
-
-
 
 #Comptues magnitude of a vector. Helper for Cosine Similarity
 def mag(v):
@@ -113,24 +130,22 @@ def cosSim(vec1, vec2):
     else:
         return (numerator / denominator)
 
-#MAYBE STAR
 #Find average distance to question keywords
-def keywordDistance(docSentence, keywords, ansIndex):
+def keywordDistance(docSentence, question, ansIndex):
     keywordIndices = []
     for i in range(0, len(docSentence)):
-        if docSentence[i].lower() in keywords:
+        if docSentence[i].lower() in question.tokens:
             keywordIndices.append(i)
 
     invResult = 0.0
     for i in range(0, len(keywordIndices)):
-        invResult += math.sqrt(abs(ansIndex - i))
+        invResult += math.sqrt(abs(ansIndex - i)) / question.weights[question.tokens.index(docSentence[keywordIndices[i]].lower())]
     
     if invResult == 0:
         return 1.0
 
     return 1.0/invResult
 
-#STAR
 #For a given document sentence and set of query keywords, return a vector
 # that represents the frequency with which those keywords occury in the
 # sentence
@@ -141,46 +156,38 @@ def getQueryVector(docSentence, query):
             keywordVector[query.index(token.lower())] += 1
     return keywordVector
 
-#STAR
 #Sort the top docs for a given question by their cosine similarity to 
 # the keywords of the question.
 def sortTopDocs(sentences, question):
     sentences.sort(key=lambda x: cosSim(question.weights, getQueryVector(x, question.tokens)), reverse=True)
 
-#STAR
-#Method to edit most
+#Match parts of speech patterns to combine nouns into noun phrases
+def chunkSentence(sentence):
+    partsOfSpeech = nltk.pos_tag(sentence)
+    chunks = [NPChunker.parse(partsOfSpeech)]
+    nps = []
+    tree = NPChunker.parse(chunks)
+
+    for subtree in tree.subtrees():
+        if subtree.label() == 'NP':
+            t = subtree
+            t = ' '.join(word for word, tag in t.leaves())
+            nps.append(t)
+    return nps
+
 #Takes the top 5 documents and ranks which entities might be answers
 def extractAnswers(sortedDocs, question):
     possibleAnswers = []
     weights = []
     nounTags = ['NN', 'NNP', 'NNS', 'NNPS']
-    neTagLookup = {'where':['LOCATION'], 'who':['PERSON', 'ORGANIZATION'], 'when':['DATE']}
+    neTagLookup = {'where':['LOCATION'], 'who':['PERSON', 'ORGANIZATION'], 'when':['DATE']}         
     
+    if question.qType is 'when':
 
-    #Chunk
-    for i in range(0, 5):
-        partsOfSpeech = nltk.pos_tag(sortedDocs[i])
-        chunks = [NPChunker.parse(partsOfSpeech)]
-
-        tree = NPChunker.parse(chunks)
-        print str(tree)
-
-        nps = []
-        for subtree in tree.subtrees():
-            if subtree.node == 'NP':
-                t = subtree
-                t = ' '.join(word for word, tag in t.leaves())
-                nps.append(t)
-
-        print str(nps)
-    
-    
-    #Take top 5 topdocs
-    if question.qType is 'where' or question.qType is 'who' or question.qType is 'when':
+        #Take top 5 documents
         for i in range(0, 5):
             namedEntities = NER_TAGGER.tag(sortedDocs[i])
-            print str(namedEntities)
-            
+                        
             #Consider each entity tagged
             for j in range(0, len(namedEntities)):
                 entity = namedEntities[j]
@@ -191,13 +198,33 @@ def extractAnswers(sortedDocs, question):
                 #If the entity is not yet a possible answer add it, else increment it's weight
                     if not (entity[0] in possibleAnswers):
                         possibleAnswers.append(entity[0])
-                        weights.append(keywordDistance(sortedDocs[i], q.tokens, j))
+                        weights.append(keywordDistance(sortedDocs[i], q, j))
                     else:
-                        weights[possibleAnswers.index(entity[0])] += keywordDistance(sortedDocs[i], q.tokens, j)
-    elif question.qType is 'how':
+                        weights[possibleAnswers.index(entity[0])] += keywordDistance(sortedDocs[i], q, j)
+
+    elif question.qType is 'who' or question.qType is 'where':
+
+        #Take top 5 documents
         for i in range(0, 5):
-            partsOfSpeech = nltk.pos_tag(sortedDocs[i])
-            print str(partsOfSpeech)
+            namedEntities = NER_TAGGER.tag(sortedDocs[i])
+                        
+            #Consider each entity tagged
+            for j in range(0, len(namedEntities)):
+                entity = namedEntities[j]
+
+                if entity[1] in neTagLookup[question.qType] and (not entity[0] in question.tokens):
+
+                #If the entity is not yet a possible answer add it, else increment it's weight
+                    if not (entity[0] in possibleAnswers):
+                        possibleAnswers.append(entity[0])
+                        weights.append(keywordDistance(sortedDocs[i], q, j))
+                    else:
+                        weights[possibleAnswers.index(entity[0])] += keywordDistance(sortedDocs[i], q, j)
+    elif question.qType is 'how':
+
+        #Take top 5 documents
+        for i in range(0, 5):
+            partsOfSpeech = nltk.pos_tag(chunkSentence(sortedDocs[i]))
 
             #Consider each entity tagged
             for j in range(0, len(partsOfSpeech)):
@@ -209,13 +236,14 @@ def extractAnswers(sortedDocs, question):
                 #If the entity is not yet a possible answer add it, else increment it's weight
                     if not (entity[0] in possibleAnswers):
                         possibleAnswers.append(entity[0])
-                        weights.append(keywordDistance(sortedDocs[i], q.tokens, j))
+                        weights.append(keywordDistance(sortedDocs[i], q, j))
                     else:
-                        weights[possibleAnswers.index(entity[0])] += keywordDistance(sortedDocs[i], q.tokens, j)
-    elif question.qType is 'what' or 'which' or 'why' or 'unknown':
+                        weights[possibleAnswers.index(entity[0])] += keywordDistance(sortedDocs[i], q, j)
+    elif question.qType is 'what' or question.qType is 'which' or question.qType is 'why' or question.qType is 'unknown':
+
+        #Take top 5 documents
         for i in range(0, 5):
             partsOfSpeech = nltk.pos_tag(sortedDocs[i])
-            print str(partsOfSpeech)
 
             #Consider each entity tagged
             for j in range(0, len(partsOfSpeech)):
@@ -227,11 +255,12 @@ def extractAnswers(sortedDocs, question):
                 #If the entity is not yet a possible answer add it, else increment it's weight
                     if not (entity[0] in possibleAnswers):
                         possibleAnswers.append(entity[0])
-                        weights.append(keywordDistance(sortedDocs[i], q.tokens, j))
+                        weights.append(keywordDistance(sortedDocs[i], q, j))
                     else:
-                        weights[possibleAnswers.index(entity[0])] += keywordDistance(sortedDocs[i], q.tokens, j)
+                        weights[possibleAnswers.index(entity[0])] += keywordDistance(sortedDocs[i], q, j)
     return sorted(possibleAnswers, key=lambda x: weights[possibleAnswers.index(x)])
 
+#Method to organize prediction file
 def writeAnswersToFile(possibleAnswers, qid):
     predictionFile.write('qid ' + str(qid) + '\n')
     for i in range(0, min(len(possibleAnswers), 10)):
@@ -251,8 +280,6 @@ if __name__ == "__main__":
 
         topDocs = getTrainTopDocs(q.number)
         sortTopDocs(topDocs, q)
-        for i in range(0, 5):
-            print "\nTopDoc number " + str(i + 1) + ": " + str(topDocs[i])
 
         possibleAnswers = extractAnswers(topDocs, q)
         writeAnswersToFile(possibleAnswers, q.number)
