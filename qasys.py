@@ -2,9 +2,12 @@ import sys
 import codecs
 from nltk.stem.snowball import SnowballStemmer
 from nltk.tag.stanford import StanfordNERTagger
+from nltk import Tree
 import nltk
 import operator
 import math
+import re
+import pprint
 import nltk.data
 
 class Question:
@@ -13,6 +16,12 @@ class Question:
         self.qType = qType
         self.tokens = tokens
         self.weights = weights
+
+# Regex patterns for chunking
+patterns = """
+NP: {<NN>+}
+"""
+NPChunker = nltk.RegexpParser(patterns)
 
 TRAIN_Q_PATH = "hw5data/qadata/train/questions.txt"
 TEST_Q_PATH = "hw5data/qadata/test/questions.txt"
@@ -24,6 +33,7 @@ SENT_DETECTOR = nltk.data.load('tokenizers/punkt/english.pickle')
 NER_TAGGER = StanfordNERTagger('/home/cs-students/18bfd2/bin/stanford-ner-2014-08-27/classifiers/english.muc.7class.distsim.crf.ser.gz', '/home/cs-students/18bfd2/bin/stanford-ner-2014-08-27/stanford-ner.jar')
 
 predictionFile = open('prediction.txt', 'w')
+
 
 #Read in and process the questions located at path
 def getQuestions(path):
@@ -81,6 +91,8 @@ def getTestTopDocs(qNum):
     with codecs.open(TEST_TOPDOCS_PATH + str(qNum), 'r', 'cp437') as topdocsData:
         sentences =  SENT_DETECTOR.tokenize(topdocsData.read().strip())
     return [x.split() for x in sentences]
+
+
 
 #Comptues magnitude of a vector. Helper for Cosine Similarity
 def mag(v):
@@ -142,8 +154,25 @@ def extractAnswers(sortedDocs, question):
     neTagLookup = {'where':['LOCATION'], 'who':['PERSON', 'ORGANIZATION'], 'when':['DATE']}
     
 
-    #Take top 5 topdocs
+    #Chunk
+    for i in range(0, 5):
+        partsOfSpeech = nltk.pos_tag(sortedDocs[i])
+        chunks = [NPChunker.parse(partsOfSpeech)]
 
+        tree = NPChunker.parse(chunks)
+        print str(tree)
+
+        nps = []
+        for subtree in tree.subtrees():
+            if subtree.node == 'NP':
+                t = subtree
+                t = ' '.join(word for word, tag in t.leaves())
+                nps.append(t)
+
+        print str(nps)
+    
+    
+    #Take top 5 topdocs
     if question.qType is 'where' or question.qType is 'who' or question.qType is 'when':
         for i in range(0, 5):
             namedEntities = NER_TAGGER.tag(sortedDocs[i])
