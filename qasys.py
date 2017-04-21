@@ -103,16 +103,19 @@ def cosSim(vec1, vec2):
 
 #MAYBE STAR
 #Find average distance to question keywords
-def keywordDistance(docSentence, question, ansIndex):
+def keywordDistance(docSentence, keywords, ansIndex):
     keywordIndices = []
     for i in range(0, len(docSentence)):
-        if docSentence[i].lower() in question.tokens:
+        if docSentence[i].lower() in keywords:
             keywordIndices.append(i)
 
     invResult = 0.0
     for i in range(0, len(keywordIndices)):
-        invResult += math.sqrt(math.abs(ansIndex - i))
+        invResult += math.sqrt(abs(ansIndex - i))
     
+    if invResult == 0:
+        return 1.0
+
     return 1.0/invResult
 
 #STAR
@@ -159,9 +162,9 @@ def extractAnswers(sortedDocs, question):
                 #If the entity is not yet a possible answer add it, else increment it's weight
                     if not (entity[0] in possibleAnswers):
                         possibleAnswers.append(entity[0])
-                        weights.append(1)
+                        weights.append(keywordDistance(sortedDocs[i], q.tokens, j))
                     else:
-                        weights[possibleAnswers.index(entity[0])] += 1
+                        weights[possibleAnswers.index(entity[0])] += keywordDistance(sortedDocs[i], q.tokens, j)
     elif question.qType is 'how':
         for i in range(0, 5):
             partsOfSpeech = nltk.pos_tag(sortedDocs[i])
@@ -177,9 +180,9 @@ def extractAnswers(sortedDocs, question):
                 #If the entity is not yet a possible answer add it, else increment it's weight
                     if not (entity[0] in possibleAnswers):
                         possibleAnswers.append(entity[0])
-                        weights.append(1)
+                        weights.append(keywordDistance(sortedDocs[i], q.tokens, j))
                     else:
-                        weights[possibleAnswers.index(entity[0])] += 1
+                        weights[possibleAnswers.index(entity[0])] += keywordDistance(sortedDocs[i], q.tokens, j)
     elif question.qType is 'what' or 'which' or 'why' or 'unknown':
         for i in range(0, 5):
             partsOfSpeech = nltk.pos_tag(sortedDocs[i])
@@ -195,9 +198,9 @@ def extractAnswers(sortedDocs, question):
                 #If the entity is not yet a possible answer add it, else increment it's weight
                     if not (entity[0] in possibleAnswers):
                         possibleAnswers.append(entity[0])
-                        weights.append(1)
+                        weights.append(keywordDistance(sortedDocs[i], q.tokens, j))
                     else:
-                        weights[possibleAnswers.index(entity[0])] += 1
+                        weights[possibleAnswers.index(entity[0])] += keywordDistance(sortedDocs[i], q.tokens, j)
     return sorted(possibleAnswers, key=lambda x: weights[possibleAnswers.index(x)])
 
 def writeAnswersToFile(possibleAnswers, qid):
